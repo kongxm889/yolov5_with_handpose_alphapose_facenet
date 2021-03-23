@@ -1,6 +1,8 @@
 from flask import Flask, render_template, Response
+
 from demo import detect_for_pose
 from facenet import *
+
 app = Flask(__name__)
 
 @app.route('/')
@@ -9,18 +11,9 @@ def index():
     return render_template('index.html')
 
 def yolo_face():
-    torch.set_grad_enabled(False)
-    # init YOLOv5 detector
-    weights = 'weights/yolov5s.pt'
-    det_model = torch.load(weights, map_location=device)['model']
-    det_model.to(device).eval()
-    det_model.float()
-    print('yolov5 model loaded from: ', weights)
-
-    # Load face model
-    face_model = Facenet()
-
-    cap = cv2.VideoCapture("D:/PythonProjects/flask_yolov5_and_facenet/video3.mp4")
+    cap = cv2.VideoCapture(0)
+    cap.set(3, 1280)
+    cap.set(4, 720)
     video_index = 0
     """Video streaming generator function."""
     while (cap.isOpened()):
@@ -110,19 +103,32 @@ def yolo_face():
                                     thickness=tf,
                                     lineType=cv2.LINE_AA)
         cv2.putText(frame, str(video_index), (10, 60), 0, tl / 3, [225, 255, 255],
-                    thickness=tf,
+                    thickness=tl,
                     lineType=cv2.LINE_AA)
         # 写入mp4前缩小
         frame = cv2.resize(frame, save_video_size)
-        yield (b'--frame\r\n'b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+        frame_bytes = cv2.imencode('.jpg', frame)[1].tobytes()
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
 
 
 @app.route('/video_start')
 def video_feed():
     """Video streaming route. Put this in the src attribute of an img tag."""
-    return Response(yolo_face,
+    return Response(yolo_face(),
                     mimetype='multipart/x-mixed-replace; boundary=frame')
 
 
 if __name__ == '__main__':
+    torch.set_grad_enabled(False)
+    # init YOLOv5 detector
+    weights = 'weights/yolov5s.pt'
+    det_model = torch.load(weights, map_location=device)['model']
+    det_model.to(device).eval()
+    det_model.float()
+    print('yolov5 model loaded from: ', weights)
+
+    # Load face model
+    face_model = Facenet()
+
     app.run(host='0.0.0.0', threaded=True, port=5001)
